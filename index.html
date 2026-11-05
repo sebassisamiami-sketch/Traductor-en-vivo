@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Traductor en vivo</title>
+<style>
+  /* ----- Traductor en vivo · estilo iOS ----- */
+  :root {
+    --bg: #000000;
+    --panel: #1c1c1e;
+    --panel-2: #2c2c2e;
+    --sep: #38383a;
+    --fg: #ffffff;
+    --fg-dim: #8e8e93;
+    --blue: #0a84ff;
+    --green: #30d158;
+    --red: #ff453a;
+    --orange: #ff9f0a;
+    --bubble-you: #0a84ff;
+    --ig: linear-gradient(45deg, #feda75 0%, #fa7e1e 25%, #d62976 50%, #962fbf 75%, #4f5bd5 100%);
+    --radius: 20px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--font);
+    display: flex; flex-direction: column; overflow: hidden;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Barra superior tipo iOS */
+  .nav {
+    padding: 8px max(16px, env(safe-area-inset-left)) 10px max(16px, env(safe-area-inset-right));
+    border-bottom: .5px solid var(--sep); background: rgba(0,0,0,.7);
+    backdrop-filter: saturate(180%) blur(20px); position: relative; z-index: 5;
+  }
+  .nav h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  .nav .sub { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 13px; color: var(--fg-dim); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-dim); }
+  body.live .dot { background: var(--red); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .gear { position: absolute; top: 8px; right: max(14px, env(safe-area-inset-right)); background: none; border: 0; color: var(--fg); cursor: pointer; padding: 6px; line-height: 0; }
+  .icon { width: 24px; height: 24px; display: inline-block; vertical-align: middle; }
+  .icon-sm { width: 20px; height: 20px; }
+
+  /* Lista de tarjetas */
+  .feed {
+    flex: 1; overflow-y: auto; padding: 16px max(16px, env(safe-area-inset-left)) 8px max(16px, env(safe-area-inset-right));
+    display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch;
+  }
+  .empty { margin: auto; text-align: center; color: var(--fg-dim); max-width: 280px; }
+  .empty .big { font-size: 46px; margin-bottom: 10px; }
+  .empty p { font-size: 15px; line-height: 1.4; margin: 6px 0; }
+
+  .card { border-radius: var(--radius); overflow: hidden; animation: rise .25s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  .card .en, .card .es { padding: 11px 15px; font-size: 16px; line-height: 1.35; }
+  .card .en { font-weight: 500; }
+  .card .es { color: #dfe8ff; font-size: 14px; border-top: .5px solid rgba(255,255,255,.18); }
+  .card .es.loading { color: var(--fg-dim); font-style: italic; }
+  .card .tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .6; padding: 8px 15px 0; font-weight: 700; }
+
+  /* Pregunta (lo que se escucha) */
+  .q { background: var(--panel); align-self: flex-start; max-width: 92%; }
+  .q .es { background: var(--panel-2); border-top-color: var(--sep); color: var(--fg-dim); }
+  /* Respuesta (lo que dices tú) */
+  .a { background: var(--bubble-you); align-self: flex-end; max-width: 92%; }
+  .a .es { color: #d6e7ff; }
+
+  /* Interino (gris, en vivo) */
+  .interim { align-self: flex-start; max-width: 92%; color: var(--fg-dim); font-size: 16px; padding: 4px 6px; font-style: italic; min-height: 20px; }
+
+  /* Barra inferior */
+  .bar {
+    border-top: .5px solid var(--sep); background: rgba(28,28,30,.92);
+    backdrop-filter: blur(20px); padding: 10px max(16px, env(safe-area-inset-left)) 12px max(16px, env(safe-area-inset-right));
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .reply-row { display: flex; gap: 8px; align-items: flex-end; }
+  textarea#reply {
+    flex: 1; min-width: 0; resize: none; border: 0; outline: 0; border-radius: 18px;
+    background: var(--panel-2); color: var(--fg); font: 15px var(--font); padding: 9px 14px;
+    max-height: 90px; line-height: 1.3;
+  }
+  .send { border: 0; border-radius: 50%; width: 40px; height: 40px; flex: none; background: var(--ig); color: #fff; cursor: pointer; display: grid; place-items: center; line-height: 0; }
+  .send:disabled { opacity: .4; }
+  .btn-row { display: flex; gap: 8px; }
+  .chip { flex: 1; border: 0; border-radius: 14px; padding: 9px; font: 600 13px var(--font); cursor: pointer; background: var(--panel-2); color: var(--fg); display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+  .chip.ai { background: rgba(214,41,118,.14); color: #e1306c; }
+  .chip .icon-sm { color: #e1306c; }
+
+  /* Micrófono central */
+  .mic-wrap { display: flex; justify-content: center; }
+  .mic {
+    border: 0; width: 64px; height: 64px; border-radius: 50%; background: var(--ig); color: #fff;
+    cursor: pointer; transition: transform .1s; display: grid; place-items: center; line-height: 0;
+    box-shadow: 0 6px 20px rgba(214,41,118,.4);
+  }
+  .mic:active { transform: scale(.94); }
+  body.live .mic { background: var(--red); box-shadow: 0 0 0 0 rgba(255,69,58,.5); animation: ring 1.5s infinite; }
+  @keyframes ring { 0%{box-shadow:0 0 0 0 rgba(255,69,58,.5)} 70%{box-shadow:0 0 0 18px rgba(255,69,58,0)} 100%{box-shadow:0 0 0 0 rgba(255,69,58,0)} }
+  .hint { text-align: center; font-size: 12px; color: var(--fg-dim); margin-top: -2px; }
+
+  /* Hoja de ajustes */
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; z-index: 20; }
+  .sheet-bg.open { display: block; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); z-index: 21;
+    border-radius: 16px 16px 0 0; padding: 20px max(16px, env(safe-area-inset-left)) calc(20px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
+    transform: translateY(100%); transition: transform .28s ease; max-height: 85%; overflow-y: auto;
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet h2 { margin: 0 0 4px; font-size: 18px; }
+  .sheet p { color: var(--fg-dim); font-size: 13px; line-height: 1.4; margin: 6px 0 14px; }
+  .sheet label { font-size: 13px; color: var(--fg-dim); display: block; margin: 12px 0 4px; }
+  .sheet input, .sheet select {
+    width: 100%; border: 0; border-radius: 10px; background: var(--panel-2); color: var(--fg);
+    font: 15px var(--font); padding: 11px 13px; outline: 0;
+  }
+  .sheet .close { width: 100%; margin-top: 18px; border: 0; border-radius: 12px; background: var(--blue); color: #fff; font: 600 16px var(--font); padding: 13px; cursor: pointer; }
+  .warn { background: rgba(255,159,10,.12); color: var(--orange); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.4; margin: 14px 0 0; }
+  .toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%) translateY(10px); background: var(--panel-2); color: var(--fg); padding: 9px 16px; border-radius: 20px; font-size: 13px; opacity: 0; transition: .25s; pointer-events: none; z-index: 30; }
+  .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <header class="nav">
+    <h1>Traductor en vivo</h1>
+    <div class="sub"><span class="dot"></span><span id="status">Toca el micrófono para empezar</span></div>
+    <button class="gear" id="gear" aria-label="Ajustes">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
+  </header>
+
+  <main class="feed" id="feed">
+    <div class="empty" id="empty">
+      <div class="big">🎙️</div>
+      <p><b>Escucha inglés en vivo.</b></p>
+      <p>Toca el micrófono y habla o acerca el audio de la llamada. Cada frase aparece en inglés con su traducción al español debajo.</p>
+    </div>
+  </main>
+
+  <div class="bar">
+    <div class="interim" id="interim"></div>
+    <div class="mic-wrap"><button class="mic" id="mic" aria-label="Micrófono">
+      <svg class="icon" style="width:28px;height:28px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+    </button></div>
+    <div class="hint" id="hint">Idioma de escucha: inglés (EN&nbsp;→&nbsp;ES)</div>
+    <div class="reply-row">
+      <textarea id="reply" rows="1" placeholder="Escribe tu respuesta en inglés…"></textarea>
+      <button class="send" id="send" aria-label="Enviar" disabled>
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </div>
+    <div class="btn-row">
+      <button class="chip ai" id="genBtn">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"></path><path d="M18.5 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"></path></svg>
+        <span id="genLabel">Generar respuesta en inglés</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="sheetBg"></div>
+  <div class="sheet" id="sheet">
+    <h2>Ajustes</h2>
+    <p>La traducción funciona sin configurar nada. Para <b>generar respuestas en inglés</b> con IA, pega tu clave de OpenAI (se guarda solo en este dispositivo).</p>
+
+    <label for="voiceLang">Idioma que vas a escuchar</label>
+    <select id="voiceLang">
+      <option value="en-US">Inglés (EE. UU.)</option>
+      <option value="en-GB">Inglés (Reino Unido)</option>
+    </select>
+
+    <label for="apiKey">Clave de OpenAI (opcional)</label>
+    <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+
+    <label for="ctx">Contexto para las respuestas (opcional)</label>
+    <input id="ctx" type="text" placeholder="Ej: soporte técnico, entrevista de trabajo…">
+
+    <div class="warn">Sin clave de OpenAI igual puedes traducir todo y escribir tú mismo tu respuesta en inglés; solo se desactiva el botón de generar.</div>
+    <button class="close" id="closeSheet">Listo</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const feed = $("#feed"), empty = $("#empty"), interim = $("#interim");
+  const micBtn = $("#mic"), statusEl = $("#status"), reply = $("#reply"), sendBtn = $("#send"), genBtn = $("#genBtn");
+  const store = {
+    get k(){ try { return localStorage.getItem("tev-key")||""; } catch(e){ return ""; } },
+    set k(v){ try { localStorage.setItem("tev-key", v); } catch(e){} },
+    get lang(){ try { return localStorage.getItem("tev-lang")||"en-US"; } catch(e){ return "en-US"; } },
+    set lang(v){ try { localStorage.setItem("tev-lang", v); } catch(e){} },
+    get ctx(){ try { return localStorage.getItem("tev-ctx")||""; } catch(e){ return ""; } },
+    set ctx(v){ try { localStorage.setItem("tev-ctx", v); } catch(e){} },
+  };
+
+  /* ---------- Traducción EN → ES (MyMemory, sin clave) ---------- */
+  async function translate(text, from, to) {
+    const t = text.trim();
+    if (!t) return "";
+    try {
+      const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(t) + "&langpair=" + from + "|" + to;
+      const r = await fetch(url);
+      const j = await r.json();
+      let out = (j.responseData && j.responseData.translatedText) || "";
+      // MyMemory a veces devuelve avisos en mayúsculas; si viene vacío, probamos matches
+      if (j.responseStatus !== 200 && j.matches && j.matches[0]) out = j.matches[0].translation || out;
+      return out || "(no se pudo traducir)";
+    } catch (e) {
+      return "(sin conexión para traducir)";
+    }
+  }
+
+  /* ---------- Tarjetas ---------- */
+  function addCard(kind, englishText) {
+    empty.remove && empty.parentNode && empty.remove();
+    const card = document.createElement("div");
+    card.className = "card " + (kind === "q" ? "q" : "a");
+    const tag = document.createElement("div");
+    tag.className = "tag";
+    tag.textContent = kind === "q" ? "Escuchado" : "Tu respuesta";
+    const en = document.createElement("div");
+    en.className = "en"; en.textContent = englishText;
+    const es = document.createElement("div");
+    es.className = "es loading"; es.textContent = "traduciendo…";
+    card.append(tag, en, es);
+    feed.appendChild(card);
+    feed.scrollTop = feed.scrollHeight;
+    translate(englishText, "en", "es").then(tr => { es.textContent = tr; es.classList.remove("loading"); feed.scrollTop = feed.scrollHeight; });
+    return card;
+  }
+
+  /* ---------- Reconocimiento de voz ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, listening = false, wantListen = false;
+
+  function buildRec() {
+    const r = new SR();
+    r.lang = store.lang;
+    r.continuous = true;
+    r.interimResults = true;
+    r.onresult = e => {
+      let inter = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) { const txt = res[0].transcript.trim(); if (txt) addCard("q", txt[0].toUpperCase() + txt.slice(1)); }
+        else inter += res[0].transcript;
+      }
+      interim.textContent = inter;
+    };
+    r.onerror = ev => {
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        toast("Permiso de micrófono denegado"); stop();
+      } else if (ev.error === "no-speech") { /* ignora, sigue */ }
+    };
+    r.onend = () => { if (wantListen) { try { r.start(); } catch(e){} } else { listening = false; document.body.classList.remove("live"); } };
+    return r;
+  }
+
+  function start() {
+    if (!SR) { toast("Tu navegador no soporta reconocimiento de voz. Usa Chrome."); return; }
+    wantListen = true; listening = true;
+    rec = buildRec();
+    try { rec.start(); } catch(e){}
+    document.body.classList.add("live");
+    statusEl.textContent = "Escuchando inglés…";
+  }
+  function stop() {
+    wantListen = false; listening = false;
+    if (rec) { try { rec.stop(); } catch(e){} }
+    document.body.classList.remove("live");
+    statusEl.textContent = "En pausa · toca para seguir";
+    interim.textContent = "";
+  }
+  micBtn.addEventListener("click", () => listening ? stop() : start());
+
+  /* ---------- Respuesta que escribes tú ---------- */
+  reply.addEventListener("input", () => {
+    reply.style.height = "auto"; reply.style.height = Math.min(reply.scrollHeight, 90) + "px";
+    sendBtn.disabled = !reply.value.trim();
+  });
+  function sendReply() {
+    const t = reply.value.trim();
+    if (!t) return;
+    addCard("a", t);
+    reply.value = ""; reply.style.height = "auto"; sendBtn.disabled = true;
+  }
+  sendBtn.addEventListener("click", sendReply);
+  reply.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } });
+
+  /* ---------- Generar respuesta en inglés (OpenAI, opcional) ---------- */
+  async function generate() {
+    const key = store.k;
+    if (!key) { toast("Agrega tu clave de OpenAI en Ajustes"); openSheet(); return; }
+    // última pregunta escuchada
+    const qs = [...feed.querySelectorAll(".card.q .en")];
+    if (!qs.length) { toast("Primero escucha una pregunta"); return; }
+    const lastQ = qs[qs.length - 1].textContent;
+    const genLabel = $("#genLabel");
+    genBtn.disabled = true; genLabel.textContent = "Generando…";
+    try {
+      const sys = "You are helping a Spanish-speaking person reply in a live English conversation" +
+        (store.ctx ? " about " + store.ctx : "") +
+        ". Reply ONLY with a short, natural English response (1-2 sentences) to the last thing the other person said. No quotes, no explanation.";
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+        body: JSON.stringify({ model: "gpt-4o-mini", temperature: 0.5, max_tokens: 120,
+          messages: [ { role: "system", content: sys }, { role: "user", content: lastQ } ] })
+      });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error((e.error&&e.error.message)||("HTTP "+r.status)); }
+      const j = await r.json();
+      const text = (j.choices && j.choices[0] && j.choices[0].message.content || "").trim();
+      if (text) addCard("a", text);
+    } catch (e) {
+      toast("No se pudo generar: " + e.message);
+    } finally {
+      genBtn.disabled = false; genLabel.textContent = "Generar respuesta en inglés";
+    }
+  }
+  genBtn.addEventListener("click", generate);
+
+  /* ---------- Ajustes ---------- */
+  const sheet = $("#sheet"), sheetBg = $("#sheetBg");
+  const apiKey = $("#apiKey"), voiceLang = $("#voiceLang"), ctx = $("#ctx");
+  function openSheet() { apiKey.value = store.k; voiceLang.value = store.lang; ctx.value = store.ctx; sheet.classList.add("open"); sheetBg.classList.add("open"); }
+  function closeSheet() {
+    store.k = apiKey.value.trim(); store.lang = voiceLang.value; store.ctx = ctx.value.trim();
+    if (listening) { stop(); }
+    sheet.classList.remove("open"); sheetBg.classList.remove("open");
+    $("#hint").innerHTML = "Idioma de escucha: inglés (EN&nbsp;→&nbsp;ES)";
+  }
+  $("#gear").addEventListener("click", openSheet);
+  $("#closeSheet").addEventListener("click", closeSheet);
+  sheetBg.addEventListener("click", closeSheet);
+
+  /* ---------- Toast ---------- */
+  let tt;
+  function toast(m) { const el = $("#toast"); el.textContent = m; el.classList.add("on"); clearTimeout(tt); tt = setTimeout(()=>el.classList.remove("on"), 2600); }
+
+  if (!SR) statusEl.textContent = "Usa Google Chrome para el reconocimiento de voz";
+})();
+</script>
+</body>
+</html>
