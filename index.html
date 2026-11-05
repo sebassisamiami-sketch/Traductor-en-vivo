@@ -59,8 +59,9 @@
   .card .es.loading { color: var(--fg-dim); font-style: italic; }
   .card .en.loading { color: rgba(255,255,255,.6); font-style: italic; font-weight: 400; }
   .card .tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .6; padding: 8px 15px 0; font-weight: 700; }
-  .card .copy { position: absolute; top: 7px; right: 9px; background: none; border: 0; color: inherit; opacity: .5; cursor: pointer; padding: 4px; line-height: 0; }
-  .card .copy:active { opacity: 1; }
+  .card .tools { position: absolute; top: 6px; right: 7px; display: flex; gap: 2px; }
+  .card .tbtn { background: none; border: 0; color: inherit; opacity: .5; cursor: pointer; padding: 4px; line-height: 0; }
+  .card .tbtn:active, .card .tbtn.on { opacity: 1; }
 
   .q { background: var(--panel); align-self: flex-start; max-width: 92%; }
   .q .es { background: var(--panel-2); border-top-color: var(--sep); color: var(--fg-dim); }
@@ -290,13 +291,34 @@
   function copyIcon() {
     return '<svg class="icon-sm" style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   }
+  function speakIcon() {
+    return '<svg class="icon-sm" style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
+  }
+  // Leer en inglés con la voz del navegador (sin API)
+  let enVoice = null;
+  function loadVoices() {
+    const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+    enVoice = vs.find(v => /en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+  }
+  if (window.speechSynthesis) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+  function speak(text, btn) {
+    if (!window.speechSynthesis) { toast("Tu navegador no puede leer en voz alta"); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; if (enVoice) u.voice = enVoice; u.rate = 0.95;
+    if (btn) { btn.classList.add("on"); u.onend = () => btn.classList.remove("on"); u.onerror = () => btn.classList.remove("on"); }
+    speechSynthesis.speak(u);
+  }
   function buildShell(kind) {
     if (empty && empty.parentNode) empty.remove();
     const card = document.createElement("div");
     card.className = "card " + (kind === "q" ? "q" : "a");
     card.innerHTML =
       '<div class="tag">' + (kind === "q" ? "Escuchado" : "Tu respuesta") + '</div>' +
-      '<button class="copy" title="Copiar">' + copyIcon() + '</button>' +
+      '<div class="tools">' +
+        '<button class="tbtn speak" title="Leer en inglés">' + speakIcon() + '</button>' +
+        '<button class="tbtn copy" title="Copiar">' + copyIcon() + '</button>' +
+      '</div>' +
       '<div class="en"></div>';
     const enDiv = card.querySelector(".en");
     const esDiv = document.createElement("div"); esDiv.className = "es";
@@ -305,6 +327,8 @@
     card.querySelector(".copy").addEventListener("click", () => {
       try { navigator.clipboard.writeText(enDiv.textContent); toast("Copiado"); } catch(e){}
     });
+    const sp = card.querySelector(".speak");
+    sp.addEventListener("click", () => { const txt = enDiv.textContent; if (txt && txt !== "traduciendo…") speak(txt, sp); });
     return { card, enDiv, esDiv };
   }
   // Tarjeta donde ya sabemos el inglés; el español se traduce (o viene dado)
