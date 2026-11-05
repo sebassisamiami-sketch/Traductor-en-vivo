@@ -57,6 +57,7 @@
   .card .en { font-weight: 500; }
   .card .es { font-size: 14px; border-top: .5px solid rgba(255,255,255,.18); }
   .card .es.loading { color: var(--fg-dim); font-style: italic; }
+  .card .en.loading { color: rgba(255,255,255,.6); font-style: italic; font-weight: 400; }
   .card .tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .6; padding: 8px 15px 0; font-weight: 700; }
   .card .copy { position: absolute; top: 7px; right: 9px; background: none; border: 0; color: inherit; opacity: .5; cursor: pointer; padding: 4px; line-height: 0; }
   .card .copy:active { opacity: 1; }
@@ -146,7 +147,7 @@
     </button></div>
     <div class="hint" id="hint">Dispositivo: predeterminado · EN&nbsp;→&nbsp;ES</div>
     <div class="reply-row">
-      <textarea id="reply" rows="1" placeholder="Escribe tu respuesta en inglés…"></textarea>
+      <textarea id="reply" rows="1" placeholder="Escribe en español o inglés…"></textarea>
       <button class="send" id="send" aria-label="Enviar" disabled>
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
@@ -272,11 +273,12 @@
     return best || FALLBACK;
   }
 
-  /* ---------- Traducción EN → ES (gratis, sin clave) ---------- */
-  async function translate(text) {
+  /* ---------- Traducción (gratis, sin clave) ---------- */
+  async function translate(text, pair) {
     const t = (text||"").trim(); if (!t) return "";
+    pair = pair || "en|es";
     try {
-      const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(t) + "&langpair=en|es";
+      const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(t) + "&langpair=" + pair;
       const r = await fetch(url); const j = await r.json();
       let out = (j.responseData && j.responseData.translatedText) || "";
       if (j.responseStatus !== 200 && j.matches && j.matches[0]) out = j.matches[0].translation || out;
@@ -288,7 +290,7 @@
   function copyIcon() {
     return '<svg class="icon-sm" style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   }
-  function addCard(kind, en, esKnown) {
+  function buildShell(kind) {
     if (empty && empty.parentNode) empty.remove();
     const card = document.createElement("div");
     card.className = "card " + (kind === "q" ? "q" : "a");
@@ -296,18 +298,24 @@
       '<div class="tag">' + (kind === "q" ? "Escuchado" : "Tu respuesta") + '</div>' +
       '<button class="copy" title="Copiar">' + copyIcon() + '</button>' +
       '<div class="en"></div>';
-    card.querySelector(".en").textContent = en;
-    card.querySelector(".copy").addEventListener("click", () => {
-      try { navigator.clipboard.writeText(en); toast("Copiado"); } catch(e){}
-    });
-    // traducción
-    if (esKnown != null) {
-      const es = document.createElement("div"); es.className = "es"; es.textContent = esKnown; card.appendChild(es);
-    } else if (settings.trans) {
-      const es = document.createElement("div"); es.className = "es loading"; es.textContent = "traduciendo…"; card.appendChild(es);
-      translate(en).then(tr => { es.textContent = tr; es.classList.remove("loading"); feed.scrollTop = feed.scrollHeight; });
-    }
+    const enDiv = card.querySelector(".en");
+    const esDiv = document.createElement("div"); esDiv.className = "es";
+    card.appendChild(esDiv);
     feed.appendChild(card); feed.scrollTop = feed.scrollHeight;
+    card.querySelector(".copy").addEventListener("click", () => {
+      try { navigator.clipboard.writeText(enDiv.textContent); toast("Copiado"); } catch(e){}
+    });
+    return { card, enDiv, esDiv };
+  }
+  // Tarjeta donde ya sabemos el inglés; el español se traduce (o viene dado)
+  function addCard(kind, en, esKnown) {
+    const { enDiv, esDiv } = buildShell(kind);
+    enDiv.textContent = en;
+    if (esKnown != null) { esDiv.textContent = esKnown; }
+    else if (settings.trans) {
+      esDiv.classList.add("loading"); esDiv.textContent = "traduciendo…";
+      translate(en, "en|es").then(tr => { esDiv.textContent = tr; esDiv.classList.remove("loading"); feed.scrollTop = feed.scrollHeight; });
+    } else { esDiv.remove(); }
   }
 
   /* ---------- Reconocimiento de voz ---------- */
@@ -362,7 +370,31 @@
     reply.style.height = "auto"; reply.style.height = Math.min(reply.scrollHeight, 90) + "px";
     sendBtn.disabled = !reply.value.trim();
   });
-  function sendReply() { const t = reply.value.trim(); if (!t) return; addCard("a", t); reply.value = ""; reply.style.height = "auto"; sendBtn.disabled = true; }
+  // ¿El texto parece español?
+  function looksSpanish(t) {
+    if (/[áéíóúñ¿¡]/i.test(t)) return true;
+    return /\b(que|el|la|los|las|una|unos|unas|con|por|para|como|cómo|gracias|hola|usted|est[áa]|puede|puedo|necesito|ayuda|problema|cuenta|contrase|correo|días|buenas|señor|claro|tengo|quiero|pero|porque|mi|su)\b/i.test(t);
+  }
+  async function sendReply() {
+    const t = reply.value.trim(); if (!t) return;
+    reply.value = ""; reply.style.height = "auto"; sendBtn.disabled = true;
+    const { enDiv, esDiv } = buildShell("a");
+    if (looksSpanish(t)) {
+      // Escribiste en español → inglés arriba, tu español abajo
+      esDiv.textContent = t;
+      enDiv.classList.add("loading"); enDiv.textContent = "traduciendo…";
+      const en = await translate(t, "es|en");
+      enDiv.textContent = en; enDiv.classList.remove("loading"); feed.scrollTop = feed.scrollHeight;
+    } else {
+      // Escribiste en inglés → inglés arriba, español abajo
+      enDiv.textContent = t;
+      if (settings.trans) {
+        esDiv.classList.add("loading"); esDiv.textContent = "traduciendo…";
+        const es = await translate(t, "en|es");
+        esDiv.textContent = es; esDiv.classList.remove("loading"); feed.scrollTop = feed.scrollHeight;
+      } else { esDiv.remove(); }
+    }
+  }
   sendBtn.addEventListener("click", sendReply);
   reply.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } });
 
