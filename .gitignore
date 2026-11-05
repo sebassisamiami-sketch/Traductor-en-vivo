@@ -1,0 +1,12 @@
+# Dependencias y proyecto nativo generado
+node_modules/
+android/
+ios/
+
+# Sistema
+.DS_Store
+*.log
+
+# Firebase
+.firebase/
+.firebaserc
