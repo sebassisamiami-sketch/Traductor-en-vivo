@@ -54,6 +54,10 @@
   .heard .bot { background: var(--panel-2); border-top-color: var(--sep); color: var(--fg-dim); }
   .mine { background: #0a84ff; align-self: flex-end; max-width: 92%; }
   .mine .bot { color: #d6e7ff; }
+  .suggest { align-self: stretch; max-width: 100%; border: 1px solid rgba(214,41,118,.5); background: linear-gradient(180deg, rgba(214,41,118,.12), rgba(79,91,213,.1)); }
+  .suggest .tag { color: var(--pink); opacity: .9; }
+  .suggest .top { font-weight: 600; }
+  .suggest .bot { color: #cbd2ff; border-top-color: rgba(255,255,255,.14); }
 
   .interim { align-self: flex-start; max-width: 92%; color: var(--fg-dim); font-size: 16px; padding: 4px 6px; font-style: italic; min-height: 20px; }
 
@@ -75,6 +79,10 @@
   body.live .mic { background: var(--red); box-shadow: 0 0 0 0 rgba(255,69,58,.5); animation: ring 1.5s infinite; }
   @keyframes ring { 0%{box-shadow:0 0 0 0 rgba(255,69,58,.5)} 70%{box-shadow:0 0 0 18px rgba(255,69,58,0)} 100%{box-shadow:0 0 0 0 rgba(255,69,58,0)} }
   .hint { text-align: center; font-size: 12px; color: var(--fg-dim); }
+  .pro-row { display: flex; gap: 8px; align-items: stretch; }
+  .pro-row select { flex: 1; min-width: 0; border: 0; border-radius: 12px; background: var(--panel-2); color: var(--fg); font: 600 13px var(--font); padding: 0 10px; outline: 0; }
+  .suggest-btn { border: 0; border-radius: 12px; background: rgba(214,41,118,.16); color: var(--pink); font: 700 13px var(--font); padding: 10px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .suggest-btn .pro { background: var(--ig); color: #fff; font-size: 9px; font-weight: 800; border-radius: 4px; padding: 1px 4px; letter-spacing: .04em; }
 
   /* Hojas y overlays */
   .ovl-bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 20; }
@@ -151,6 +159,21 @@
       <svg class="icon" style="width:28px;height:28px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
     </button></div>
     <div class="hint" id="hint"></div>
+    <div class="pro-row">
+      <select id="ctxSel" aria-label="Contexto profesional">
+        <option value="general">General</option>
+        <option value="realestate">Inmobiliaria</option>
+        <option value="cars">Venta de autos</option>
+        <option value="medical">Soporte médico</option>
+        <option value="interview">Entrevista de trabajo</option>
+        <option value="business">Reuniones de negocios</option>
+        <option value="legal">Trámites / migración</option>
+      </select>
+      <button class="suggest-btn" id="suggestBtn">
+        <svg class="icon-sm" style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg>
+        Sugerir respuesta <span class="pro">PRO</span>
+      </button>
+    </div>
     <div class="reply-row">
       <textarea id="reply" rows="1" placeholder="Escribe en cualquiera de los dos idiomas…"></textarea>
       <button class="send" id="send" aria-label="Enviar" disabled>
@@ -277,25 +300,28 @@
   function speakIcon(){ return '<svg class="icon-sm" style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>'; }
 
   /* ---------- Tarjetas ---------- */
-  // fromLang y toLang son objetos de LANGS. origText está en fromLang; se traduce a toLang.
-  function addCard(kind, origText, fromLang, toLang) {
+  // topText en topLang. Si botText es null, se traduce; si viene dado, se usa tal cual (botLang obligatorio).
+  function addCard(kind, topText, topLang, botText, botLang) {
     if (empty && empty.parentNode) empty.remove();
+    const tag = kind === "heard" ? "Escuchado" : kind === "suggest" ? "Sugerencia" : "Tú";
     const card = document.createElement("div");
-    card.className = "card " + (kind === "heard" ? "heard" : "mine");
+    card.className = "card " + kind;
     card.innerHTML =
-      '<div class="tag">' + (kind === "heard" ? "Escuchado" : "Tú") + '</div>' +
-      '<div class="tools"><button class="tbtn speak" title="Leer traducción">' + speakIcon() + '</button>' +
-      '<button class="tbtn copy" title="Copiar traducción">' + copyIcon() + '</button></div>' +
+      '<div class="tag">' + tag + '</div>' +
+      '<div class="tools"><button class="tbtn speak" title="Leer en voz alta">' + speakIcon() + '</button>' +
+      '<button class="tbtn copy" title="Copiar">' + copyIcon() + '</button></div>' +
       '<div class="top"></div>';
-    const top = card.querySelector(".top");
-    top.textContent = origText;
-    const bot = document.createElement("div"); bot.className = "bot loading"; bot.textContent = "traduciendo…";
-    card.appendChild(bot);
+    const top = card.querySelector(".top"); top.textContent = topText;
+    const bot = document.createElement("div"); bot.className = "bot"; card.appendChild(bot);
     feed.appendChild(card); feed.scrollTop = feed.scrollHeight;
-    translate(origText, fromLang.mm, toLang.mm).then(tr => { bot.textContent = tr; bot.classList.remove("loading"); feed.scrollTop = feed.scrollHeight; });
-    card.querySelector(".copy").addEventListener("click", () => { try { navigator.clipboard.writeText(bot.textContent); toast("Copiado"); } catch(e){} });
+    if (botText != null) { bot.textContent = botText; }
+    else { bot.classList.add("loading"); bot.textContent = "traduciendo…"; translate(topText, topLang.mm, botLang.mm).then(tr => { bot.textContent = tr; bot.classList.remove("loading"); feed.scrollTop = feed.scrollHeight; }); }
+    // Para copiar/leer elegimos el texto más útil: en una sugerencia, el de arriba (lo que vas a decir); si no, la traducción.
+    const mainText = () => kind === "suggest" ? top.textContent : bot.textContent;
+    const mainLang = () => kind === "suggest" ? topLang.tts : botLang.tts;
+    card.querySelector(".copy").addEventListener("click", () => { try { navigator.clipboard.writeText(mainText()); toast("Copiado"); } catch(e){} });
     const sp = card.querySelector(".speak");
-    sp.addEventListener("click", () => { const txt = bot.textContent; if (txt && !bot.classList.contains("loading")) speak(txt, toLang.tts, sp); });
+    sp.addEventListener("click", () => { const txt = mainText(); if (txt && !bot.classList.contains("loading")) speak(txt, mainLang(), sp); });
   }
 
   /* ---------- Detectar idioma del texto escrito (A o B) ---------- */
@@ -308,6 +334,73 @@
     if (b.c === "es" && esWords.test(t)) return b;
     // por defecto asumimos que escribes en tu idioma (B) y traduces al A
     return b;
+  }
+
+  /* ---------- Asistente profesional (paquetes de contexto, sin IA) ---------- */
+  const CONTEXTS = {
+    general: { name:"General", book:[
+      { k:["hello","hi","hola","buenos","good morning"], en:"Hello! Thank you for reaching out. How can I help you today?", es:"¡Hola! Gracias por comunicarse. ¿En qué puedo ayudarle hoy?" },
+      { k:["repeat","again","no entiendo","understand","perdón","sorry"], en:"Of course, let me repeat that more slowly so it's clear.", es:"Por supuesto, permítame repetirlo más despacio para que quede claro." },
+      { k:["thank","gracias","appreciate"], en:"You're very welcome. Is there anything else I can help you with?", es:"Con mucho gusto. ¿Hay algo más en lo que pueda ayudarle?" },
+    ]},
+    realestate: { name:"Inmobiliaria", book:[
+      { k:["price","precio","cost","cuesta","cuánto","how much"], en:"The listing price is [precio]. I can also share the monthly estimate including taxes and HOA.", es:"El precio de venta es [precio]. También puedo darle el estimado mensual con impuestos y administración." },
+      { k:["bedroom","habitaci","rooms","baño","bath","size","metros","square"], en:"This property has [habitaciones] bedrooms and [baños] bathrooms, with about [área] of space.", es:"Esta propiedad tiene [habitaciones] habitaciones y [baños] baños, con unos [área] de espacio." },
+      { k:["visit","ver","tour","showing","cita","appointment","available"], en:"I'd be happy to schedule a showing. Would [día] at [hora] work for you?", es:"Con gusto agendo una visita. ¿Le queda bien el [día] a las [hora]?" },
+      { k:["loan","mortgage","financ","crédito","hipoteca","down payment","cuota inicial"], en:"We work with trusted lenders. With a down payment of [monto], your estimated monthly payment would be around [cuota].", es:"Trabajamos con entidades de confianza. Con una cuota inicial de [monto], su pago mensual estimado sería de unos [cuota]." },
+      { k:["neighborhood","barrio","area","school","colegio","safe","segur"], en:"It's a great neighborhood with [escuelas/comercios] nearby and easy access to transportation.", es:"Es un excelente barrio, con [escuelas/comercios] cerca y fácil acceso al transporte." },
+      { k:["offer","oferta","negoti","descuento","lower"], en:"I can present your offer of [monto] to the owner today and get back to you quickly.", es:"Puedo presentar su oferta de [monto] al propietario hoy y responderle pronto." },
+    ]},
+    cars: { name:"Venta de autos", book:[
+      { k:["price","precio","cost","cuesta","cuánto","how much"], en:"The base price of this model is [precio]. With the current promotion, it comes down to [precio promo].", es:"El precio base de este modelo es [precio]. Con la promoción actual queda en [precio promo]." },
+      { k:["finance","financ","loan","crédito","monthly","cuota","payment"], en:"We offer financing from [tasa] interest. Your monthly payment would be around [cuota] over [plazo] months.", es:"Ofrecemos financiación desde [tasa] de interés. Su cuota mensual sería de unos [cuota] a [plazo] meses." },
+      { k:["test drive","probar","manejar","drive","prueba"], en:"Absolutely, you can take it for a test drive right now. Do you have your driver's license with you?", es:"Claro, puede hacer una prueba de manejo ahora mismo. ¿Tiene su licencia de conducción a la mano?" },
+      { k:["warranty","garantía","mileage","kilometraje","used","usado","year","año"], en:"This is a [año] model with [kilometraje] and includes a [garantía] warranty.", es:"Es un modelo [año] con [kilometraje] e incluye una garantía de [garantía]." },
+      { k:["trade","parte de pago","exchange","mi carro","my car"], en:"We accept trade-ins. Bring your current car and we'll give you an appraisal today.", es:"Aceptamos su carro como parte de pago. Tráigalo y le damos un avalúo hoy mismo." },
+      { k:["discount","descuento","deal","mejor precio","lower"], en:"Let me check what I can do for you. I may be able to include [extra] at no additional cost.", es:"Déjeme ver qué puedo hacer por usted. Quizás pueda incluir [extra] sin costo adicional." },
+    ]},
+    medical: { name:"Soporte médico", book:[
+      { k:["appointment","cita","schedule","agendar","available"], en:"I can schedule your appointment. The next available slot is [día] at [hora]. Does that work for you?", es:"Puedo agendar su cita. El próximo turno disponible es el [día] a las [hora]. ¿Le funciona?" },
+      { k:["pain","dolor","symptom","síntoma","feel","siento","hurt"], en:"I'm sorry you're feeling unwell. Can you tell me where it hurts and how long you've had this?", es:"Lamento que no se sienta bien. ¿Puede decirme dónde le duele y desde hace cuánto?" },
+      { k:["insurance","seguro","coverage","cobertura","copay","pay"], en:"Let me verify your insurance coverage. Could you share your insurance ID so I can check your benefits?", es:"Déjeme verificar su cobertura. ¿Podría darme su número de seguro para revisar sus beneficios?" },
+      { k:["medication","medicina","prescription","receta","pills","pastillas"], en:"Please take [medicamento] as prescribed. If symptoms continue after [tiempo], contact us right away.", es:"Tome [medicamento] como se le indicó. Si los síntomas siguen después de [tiempo], contáctenos de inmediato." },
+      { k:["emergency","emergencia","urgent","urgente","911"], en:"If this is an emergency, please call 911 or go to the nearest emergency room immediately.", es:"Si es una emergencia, por favor llame al 911 o vaya a la sala de urgencias más cercana de inmediato." },
+      { k:["results","resultado","test","examen","lab"], en:"Your results are ready. The doctor will go over them with you. Everything looks [estado].", es:"Sus resultados están listos. El médico los revisará con usted. Todo se ve [estado]." },
+    ]},
+    interview: { name:"Entrevista de trabajo", book:[
+      { k:["tell me about yourself","háblame de ti","about yourself","who are you"], en:"I'm a software technologist with two years of experience in data and support. I enjoy solving problems and learning fast.", es:"Soy tecnólogo en software con dos años de experiencia en datos y soporte. Me gusta resolver problemas y aprender rápido." },
+      { k:["experience","experiencia","worked","trabajaste","background"], en:"In my last role I worked with SQL, automation and incident handling, collaborating closely with the development team.", es:"En mi último puesto trabajé con SQL, automatización y atención de incidentes, en estrecha colaboración con el equipo de desarrollo." },
+      { k:["strength","fortaleza","good at","bueno en"], en:"My main strength is attention to detail. I always validate my work before delivering it.", es:"Mi mayor fortaleza es la atención al detalle. Siempre valido mi trabajo antes de entregarlo." },
+      { k:["weakness","debilidad","improve","mejorar"], en:"Sometimes I review things too carefully, so I've learned to set time limits and prioritize.", es:"A veces reviso demasiado, así que aprendí a ponerme límites de tiempo y a priorizar." },
+      { k:["salary","salario","expect","aspiración","pay"], en:"Based on my experience, I'm looking for a range around [monto], and I'm open to discussing the full package.", es:"Según mi experiencia, busco un rango cercano a [monto], y estoy abierto a conversar el paquete completo." },
+      { k:["why","por qué","this company","esta empresa","interested"], en:"I'm very interested in this role because it matches my skills and I'd love to grow with your team.", es:"Me interesa mucho este puesto porque encaja con mis habilidades y me encantaría crecer con su equipo." },
+      { k:["question","pregunta","anything else"], en:"Yes, I have one: what would the priorities be for this role in the first three months?", es:"Sí, tengo una: ¿cuáles serían las prioridades de este puesto en los primeros tres meses?" },
+    ]},
+    business: { name:"Reuniones de negocios", book:[
+      { k:["agenda","start","empezar","today","hoy"], en:"Thank you all for joining. Today I'd like to cover [temas] and agree on the next steps.", es:"Gracias a todos por conectarse. Hoy me gustaría cubrir [temas] y acordar los próximos pasos." },
+      { k:["propose","propuesta","offer","oferta","deal"], en:"Our proposal is [propuesta]. We believe it brings clear value for both sides.", es:"Nuestra propuesta es [propuesta]. Creemos que aporta un valor claro para ambas partes." },
+      { k:["price","precio","budget","presupuesto","cost"], en:"The estimated budget for this is [monto]. I'm happy to walk you through what's included.", es:"El presupuesto estimado para esto es [monto]. Con gusto le explico qué incluye." },
+      { k:["timeline","plazo","when","cuándo","deadline"], en:"We estimate the delivery in [plazo]. I'll send a detailed timeline after this meeting.", es:"Estimamos la entrega en [plazo]. Enviaré un cronograma detallado después de esta reunión." },
+      { k:["agree","acuerdo","next steps","siguiente","follow up"], en:"Great. As next steps, I'll send a summary and we'll confirm by [fecha]. Does that work for everyone?", es:"Perfecto. Como siguientes pasos, enviaré un resumen y confirmamos antes del [fecha]. ¿Les parece bien a todos?" },
+      { k:["think about","pensarlo","consider","revisar"], en:"Of course, take the time you need. I'll follow up next week to answer any questions.", es:"Por supuesto, tómese el tiempo que necesite. Haré seguimiento la próxima semana para resolver dudas." },
+    ]},
+    legal: { name:"Trámites / migración", book:[
+      { k:["document","documento","papers","papeles","need","necesito","bring","traer"], en:"For this process you'll need [documentos]. Would you like me to write down the full list for you?", es:"Para este trámite necesita [documentos]. ¿Quiere que le anote la lista completa?" },
+      { k:["appointment","cita","schedule","agendar"], en:"Your appointment is on [fecha] at [hora]. Please arrive 15 minutes early with your documents.", es:"Su cita es el [fecha] a las [hora]. Por favor llegue 15 minutos antes con sus documentos." },
+      { k:["form","formulario","fill","llenar","sign","firmar"], en:"Please fill in this form with your personal information. I can help you if any part is unclear.", es:"Por favor llene este formulario con sus datos personales. Puedo ayudarle si algo no queda claro." },
+      { k:["bank","banco","account","cuenta","open"], en:"To open an account you'll need your ID, proof of address, and your tax number. Do you have those with you?", es:"Para abrir una cuenta necesita su identificación, un comprobante de domicilio y su número de impuestos. ¿Los tiene con usted?" },
+      { k:["school","colegio","escuela","enroll","matricular","child","hijo"], en:"To enroll your child, we'll need their birth certificate, vaccination record, and proof of address.", es:"Para matricular a su hijo, necesitaremos su registro de nacimiento, el carné de vacunas y un comprobante de domicilio." },
+      { k:["cost","costo","fee","pago","how much","cuánto"], en:"The fee for this procedure is [monto]. You can pay [métodos]. Would you like a receipt?", es:"El costo de este trámite es [monto]. Puede pagar con [métodos]. ¿Desea un recibo?" },
+      { k:["wait","espera","how long","cuánto tiempo","time"], en:"The processing time is usually [tiempo]. I'll let you know as soon as there's an update.", es:"El tiempo de trámite suele ser [tiempo]. Le avisaré en cuanto haya novedades." },
+    ]},
+  };
+  const CTX_FALLBACK = { en:"I see. Could you give me a bit more detail so I can help you better?", es:"Entiendo. ¿Podría darme un poco más de detalle para ayudarle mejor?" };
+  function suggestFor(text, ctxKey) {
+    const t = (text||"").toLowerCase();
+    const pack = (CONTEXTS[ctxKey] || CONTEXTS.general).book;
+    let best = null, score = 0;
+    for (const e of pack) { let s = 0; for (const kw of e.k) if (t.includes(kw)) s += kw.length; if (s > score) { score = s; best = e; } }
+    return best || CTX_FALLBACK;
   }
 
   /* ---------- Voz ---------- */
@@ -324,7 +417,7 @@
       let inter = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) { const txt = res[0].transcript.trim(); if (txt) addCard("heard", txt[0].toUpperCase()+txt.slice(1), byCode(st.a), byCode(st.b)); }
+        if (res.isFinal) { const txt = res[0].transcript.trim(); if (txt) addCard("heard", txt[0].toUpperCase()+txt.slice(1), byCode(st.a), null, byCode(st.b)); }
         else inter += res[0].transcript;
       }
       interim.textContent = inter;
@@ -348,10 +441,23 @@
     const t = reply.value.trim(); if (!t) return;
     reply.value = ""; reply.style.height = "auto"; sendBtn.disabled = true;
     const from = guessLang(t); const to = (from.c === st.a) ? byCode(st.b) : byCode(st.a);
-    addCard("mine", t, from, to);
+    addCard("mine", t, from, null, to);
   }
   sendBtn.addEventListener("click", sendReply);
   reply.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } });
+
+  /* ---------- Botón sugerir respuesta (asistente profesional) ---------- */
+  const ctxSel = $("#ctxSel");
+  ctxSel.value = store.g("tev-ctx","general");
+  ctxSel.addEventListener("change", () => store.s("tev-ctx", ctxSel.value));
+  $("#suggestBtn").addEventListener("click", () => {
+    const heard = [...feed.querySelectorAll(".card.heard")];
+    if (!heard.length) { toast("Primero escucha lo que dijo la otra persona"); return; }
+    const card = heard[heard.length - 1];
+    const last = (card.querySelector(".top").textContent || "") + " " + (card.querySelector(".bot").textContent || "");
+    const s = suggestFor(last, ctxSel.value);
+    addCard("suggest", s.en, byCode("en"), s.es, byCode("es"));
+  });
 
   /* ---------- Dispositivos ---------- */
   const deviceSel = $("#deviceSel");
